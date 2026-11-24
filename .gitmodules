@@ -1,0 +1,20 @@
+[submodule "external/inflect-sim-core"]
+	path = external/inflect-sim-core
+	url = https://github.com/INFLECT-Praenora/inflect-sim-core.git
+	shallow = true
+[submodule "external/biogears"]
+	path = external/biogears
+	url = https://github.com/BioGearsEngine/core.git
+	shallow = true
+[submodule "external/pybiogears"]
+	path = external/pybiogears
+	url = https://github.com/vivarium-collective/pybiogears.git
+	shallow = true
+[submodule "external/xerces-c"]
+	path = external/xerces-c
+	url = https://github.com/apache/xerces-c.git
+	shallow = true
+[submodule "external/eigen"]
+	path = external/eigen
+	url = https://gitlab.com/libeigen/eigen.git
+	shallow = true
