@@ -1,0 +1,276 @@
+# Builds the Python environment bundle on each platform, checks it and archives it, and reports
+# upstream drift (docs/releasing.md). Not yet verified: the workflow has not yet passed.
+#
+# - On a pull request to main: builds and checks every bundle and keeps the archives as workflow
+#   artifacts for 7 days.
+# - Run manually (Actions > Build > Run workflow, or gh workflow run build.yml --ref <branch>): the
+#   same, for the chosen branch. With the input publish, which only main accepts, it then creates a
+#   draft release v<version> with the archives and their checksums; an administrator publishes it.
+# - On the schedule (Mondays): only the job Drift, which compares the upstreams that follow a
+#   branch with their pins (tools/upstream_drift.py) and fails when one moved. It builds nothing.
+#
+# The build jobs run the commands of docs/building.md. Bundles are built with the compiler of the
+# runner image, which names them, so the runner labels are fixed versions, never -latest.
+
+name: Build
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Create a draft release v<version> with the bundles (main only)
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The uv and Rust versions the bundles are built with (docs/building.md#requirements).
+  UV_VERSION: "0.11.28"
+  RUST_VERSION: "1.100.0"
+
+jobs:
+  prepare:
+    name: Prepare
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read the bundle's version
+        id: version
+        run: |
+          version=$(sed -n 's/^    VERSION \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' \
+              CMakeLists.txt)
+          if [ -z "$version" ]; then
+            echo "::error::No project(VERSION) found in CMakeLists.txt"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Bundle version $version"
+      - name: Check that a release can be made
+        if: env.PUBLISH == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Releases are made from main only, not from $GITHUB_REF"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error::The tag v$VERSION exists already; raise the version in CMakeLists.txt"
+            exit 1
+          fi
+
+  build:
+    name: ${{ matrix.preset }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: linux-x64-release
+            runner: ubuntu-24.04
+          - preset: macos-arm64-release
+            runner: macos-26
+          - preset: windows-x64-release
+            runner: windows-2022
+    steps:
+      # Without line-ending conversion, the submodules' working trees match their commits (the
+      # manifest records any difference); long paths are needed for site-packages.
+      - name: Configure Git (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the upstream sources
+        run: git submodule update --init --depth 1
+      - name: Install uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup default "$RUST_VERSION"
+      # Ninja, and for the biogears engine CodeSynthesis XSD and patchelf (Linux).
+      - name: Install the build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build xsdcxx patchelf
+      - name: Install the build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja xsd
+      # The presets need cl and Ninja from a Visual Studio 2022 developer environment for x64. The
+      # variables that entering it changes are kept for the later steps.
+      - name: Enter the Visual Studio 2022 developer environment (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -version '[17.0,18.0)' `
+              -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual Studio 2022 with the x64 C++ tools is not installed.' }
+          $before = @{}
+          Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+          Import-Module (Join-Path $vs 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation `
+              -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
+          Get-ChildItem env: | Where-Object { $before[$_.Name] -cne $_.Value } | ForEach-Object {
+            "$($_.Name)=$($_.Value)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+      - name: Show the tools
+        shell: bash
+        run: |
+          cmake --version
+          ninja --version
+          uv --version
+          rustc --version
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Check the bundle
+        run: ctest --preset ${{ matrix.preset }}
+      - name: Check that the sources were unmodified
+        shell: bash
+        env:
+          MANIFEST: install/${{ matrix.preset }}/praenora-runtime-pyenv.json
+        run: |
+          if ! jq -e '.source.modified == false and
+                      ([.upstreams[].modified] | all(. == false))' "$MANIFEST" > /dev/null; then
+            jq '{source: .source.modified, upstreams: (.upstreams | map_values(.modified))}' \
+                "$MANIFEST"
+            echo "::error::The manifest records modified sources"
+            exit 1
+          fi
+      - name: Archive the bundle
+        run: cmake --build --preset ${{ matrix.preset }} --target package
+      - name: Upload the archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.preset }}
+          path: |
+            build/${{ matrix.preset }}/package/*.tar.xz
+            build/${{ matrix.preset }}/package/*.zip
+            build/${{ matrix.preset }}/package/*.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  release:
+    name: Draft release
+    needs: [prepare, build]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download the archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Check the archives
+        working-directory: dist
+        run: |
+          shopt -s nullglob
+          archives=(praenora-runtime-pyenv-*.tar.xz praenora-runtime-pyenv-*.zip)
+          if [ "${#archives[@]}" -eq 0 ]; then
+            echo "::error::No archives were downloaded"
+            exit 1
+          fi
+          for archive in "${archives[@]}"; do
+            case "$archive" in
+              "praenora-runtime-pyenv-$VERSION-"*) ;;
+              *) echo "::error::$archive is not of version $VERSION"; exit 1 ;;
+            esac
+            sha256sum -c "$archive.sha256"
+          done
+      - name: Write the release notes
+        run: |
+          linux=$(ls dist/praenora-runtime-pyenv-"$VERSION"-linux-*.tar.xz)
+          tar -xJf "$linux" -O --wildcards '*/praenora-runtime-pyenv.json' \
+              > "$RUNNER_TEMP/manifest.json"
+          docs="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs"
+          python=$(jq -r .python.version "$RUNNER_TEMP/manifest.json")
+          {
+            echo "Python environment bundles of the Praenora runtime, version $VERSION, built"
+            echo "from $GITHUB_SHA, with CPython $python."
+            echo
+            echo "| Upstream | Version | Ref |"
+            echo "|---|---|---|"
+            jq -r '.upstreams | to_entries[] |
+                   "| \(.key) | \(.value.version // "-") | \(.value.ref) |"' \
+                "$RUNNER_TEMP/manifest.json"
+            echo
+            echo "| Engine | Distribution | Version |"
+            echo "|---|---|---|"
+            jq -r '.engines | to_entries[] |
+                   "| \(.key) | \(.value.distribution) | \(.value.version // "-") |"' \
+                "$RUNNER_TEMP/manifest.json"
+            echo
+            echo "The Linux bundle's engines are listed; the Windows bundle has no biogears."
+            echo "Each archive has a \`.sha256\` file beside it. The layout, the names and how the"
+            echo "Praenora runtime consumes a bundle: [docs/outputs.md]($docs/outputs.md)."
+            echo
+            echo "This repository's files are under the MIT license. The software in the bundles"
+            echo "keeps its own licenses; each bundle holds their license files in \`licenses/\`"
+            echo "([docs/outputs.md]($docs/outputs.md#licenses))."
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+      - name: Create the draft release
+        run: |
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "::error::A release v$VERSION exists already"
+            exit 1
+          fi
+          gh release create "v$VERSION" --draft --target "$GITHUB_SHA" \
+              --title "praenora-runtime-pyenv $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+              dist/*
+
+  drift:
+    name: Drift
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Report upstream drift
+        run: |
+          uv run --no-project --python 3.12 tools/upstream_drift.py \
+              --summary "$GITHUB_STEP_SUMMARY"

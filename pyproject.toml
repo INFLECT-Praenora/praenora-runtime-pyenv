@@ -1,0 +1,77 @@
+# The Python environment of the bundle: what uv locks into uv.lock and installs into the bundle's
+# interpreter. This is not a distribution; nothing builds or publishes it (package = false).
+#
+# - simulation-core is inflect-sim-core, from its submodule. Each engine is an extra that names
+#   inflect-sim-core's extra of the same name; PRAENORA_PYENV_ENGINES selects the extras that a
+#   build installs (docs/building.md#options).
+# - override-dependencies removes distributions that inflect-sim-core and viva-biogears require for
+#   the workbench and reports, which the bundle does not hold (docs/upstreams.md).
+# - After any change here, or a new inflect-sim-core commit, run `uv lock` and review the change of
+#   uv.lock; configuration stops while the two do not match (docs/building.md).
+
+[project]
+name = "praenora-runtime-pyenv"
+# Equal to project(VERSION) in CMakeLists.txt.
+version = "0.1.0"
+requires-python = "==3.12.*"
+dependencies = ["simulation-core"]
+
+[project.optional-dependencies]
+tellurium = ["simulation-core[tellurium]"]
+copasi = ["simulation-core[copasi]"]
+# viva-biogears imports viva-superpowers, which inflect-sim-core gets only through the workbench;
+# pybiogears is the binding that the build compiles against BioGears. Not on Windows
+# (docs/upstreams.md#biogears).
+biogears = [
+    "simulation-core[biogears]; sys_platform != 'win32'",
+    "viva-superpowers; sys_platform != 'win32'",
+    "pybiogears; sys_platform != 'win32'",
+]
+surrogate = ["simulation-core[surrogate]"]
+rust = ["simulation-core[rust]"]
+
+[tool.uv]
+package = false
+required-version = "==0.11.28"
+# The platforms of the bundles: macOS arm64, Linux x86-64, Windows x86-64.
+environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+]
+# A requirement with a marker that is never true removes the distribution everywhere.
+override-dependencies = [
+    "vivarium-workbench; sys_platform == 'never'",
+    "bigraph-viz; sys_platform == 'never'",
+]
+# The build backends of the distributions built from source (the git and path sources of uv.lock;
+# no registry distribution is built from source), at fixed versions. Review them with each
+# re-lock that adds a source.
+build-constraint-dependencies = [
+    "hatchling==1.33.0",
+    "maturin==1.16.0",
+    "pybind11==3.1.0",
+    "scikit-build-core==1.1.2",
+    "setuptools==84.2.1",
+    "wheel==0.48.0",
+    # What hatchling and scikit-build-core require.
+    "packaging==26.4",
+    "pathspec==1.1.1",
+    "pluggy==1.7.0",
+    "trove-classifiers==2026.9.21.13",
+]
+
+[tool.uv.sources]
+simulation-core = { path = "external/inflect-sim-core" }
+pybiogears = { path = "external/pybiogears" }
+# The revisions that inflect-sim-core's own [tool.uv.sources] names; configuration checks that
+# they stay equal (PRAENORA_PYENV_VIVA_SOURCES in cmake/PraenoraPyenvVersions.cmake).
+viva-superpowers = { git = "https://github.com/vivarium-collective/viva-superpowers.git", rev = "fe4064a65d1da63452af73de49e57cc975f47bb4" }
+viva-workspace = { git = "https://github.com/vivarium-collective/viva-workspace.git", rev = "7ad2eb1a43bbb502158a69982c608f5aa66a1de6" }
+
+# viva-core takes its version from its Cargo workspace (maturin), so uv would have to build it
+# with Rust to lock it; its metadata is stated here instead. It requires no distributions.
+[[tool.uv.dependency-metadata]]
+name = "viva-core"
+version = "0.1.0"
+requires-dist = []
