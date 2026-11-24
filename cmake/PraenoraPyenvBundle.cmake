@@ -418,6 +418,36 @@ else()
             file(WRITE "${_script}" "${_new}")
         endif()
     endforeach()
+
+    # python3.12-config, which FindPython runs to find libpython, is CPython's shell script on
+    # Linux (Misc/python-config.sh.in; macOS has its Python form). It derives its prefix from its
+    # own path with unquoted command substitutions: under a path with a space, the prefix is empty
+    # and FindPython takes the libpython of /lib. The two lines get quotes.
+    set(_config "${BUNDLE}/python/bin/python3.12-config")
+    set(_unquoted [=[RESULT=$(dirname $(cd $(dirname "$1") && pwd -P))]=]
+        [=[echo $RESULT]=])
+    set(_quoted [=[RESULT=$(dirname "$(cd "$(dirname "$1")" && pwd -P)")]=]
+        [=[echo "$RESULT"]=])
+    if(EXISTS "${_config}" AND NOT IS_SYMLINK "${_config}")
+        file(READ "${_config}" _text)
+        string(FIND "${_text}" "installed_prefix ()" _shell)
+        if(_shell GREATER -1)
+            set(_new "${_text}")
+            foreach(_index RANGE 1)
+                list(GET _unquoted ${_index} _from)
+                list(GET _quoted ${_index} _to)
+                string(REPLACE "${_from}" "${_to}" _new "${_new}")
+                string(FIND "${_new}" "${_to}" _at)
+                if(_at EQUAL -1)
+                    message(FATAL_ERROR "${_config} does not contain '${_from}': quote its "
+                        "installed_prefix function in another way.")
+                endif()
+            endforeach()
+            if(NOT _new STREQUAL _text)
+                file(WRITE "${_config}" "${_new}")
+            endif()
+        endif()
+    endif()
 endif()
 
 # pybiogears' extension module names BioGears' library directory in the build tree; it gets a

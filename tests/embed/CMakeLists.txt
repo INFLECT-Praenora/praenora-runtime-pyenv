@@ -38,6 +38,11 @@ target_link_libraries(praenora_pyenv_embed PRIVATE Python3::Python)
 target_compile_definitions(praenora_pyenv_embed PRIVATE
     "PRAENORA_PYENV_PYTHON_HOME=\"${PraenoraRuntimePyenv_PYTHON_HOME}\""
     "PRAENORA_PYENV_PYTHON_EXECUTABLE=\"${PraenoraRuntimePyenv_PYTHON_EXECUTABLE}\"")
+# PyConfig_SetBytesString and PyRun_SimpleString read the paths as UTF-8; MSVC encodes string
+# literals in the ANSI code page unless told otherwise.
+if(MSVC)
+    target_compile_options(praenora_pyenv_embed PRIVATE /utf-8)
+endif()
 if(NOT WIN32)
     set_target_properties(praenora_pyenv_embed PROPERTIES
         BUILD_RPATH "${PraenoraRuntimePyenv_PYTHON_HOME}/lib")

@@ -1,6 +1,7 @@
 # Test bundle.relocated: copies the bundle to a directory whose path holds a space and a non-ASCII
 # character, checks that no binary of the copy loads anything from the original location or the
-# build tree (macOS), and runs the Python checks and the embedding program (run_embed.cmake) there.
+# build tree (macOS) and that the copy's python3.12-config names the copy as its prefix (Linux),
+# and runs the Python checks and the embedding program (run_embed.cmake) there.
 #
 #   cmake -DBUNDLE=<dir> -DBUILD_DIR=<dir> -DSOURCE_DIR=<repository> -DWORK_DIR=<dir>
 #         -DPACKAGE_NAME=<name> -DENGINES=<engines, separated by ','> -DVERSION=<v>
@@ -48,6 +49,24 @@ if(CMAKE_HOST_APPLE)
             "tree:\n  ${_offenders}")
     endif()
     message(STATUS "ok: none of ${_count} binaries names the original bundle or the build tree")
+endif()
+
+# Linux: the copy's python3.12-config, which FindPython runs to find libpython, names the copy as
+# its prefix and its configuration directory.
+if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE)
+    file(REAL_PATH "${_moved}/python" _prefix)
+    foreach(_option IN ITEMS prefix configdir)
+        execute_process(COMMAND "${_moved}/python/bin/python3.12-config" --${_option}
+            OUTPUT_VARIABLE _printed_${_option} ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE
+            ENCODING UTF-8)
+    endforeach()
+    string(FIND "${_printed_configdir}" "${_prefix}/lib/" _at)
+    if(NOT _printed_prefix STREQUAL _prefix OR NOT _at EQUAL 0)
+        message(FATAL_ERROR "FAILED: python3.12-config of the copy prints the prefix "
+            "'${_printed_prefix}' and the configuration directory '${_printed_configdir}', not "
+            "${_prefix} and a directory in it")
+    endif()
+    message(STATUS "ok: python3.12-config names the copy as its prefix")
 endif()
 
 # The Python checks, with the copy's interpreter.

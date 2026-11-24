@@ -144,7 +144,9 @@ set to `PraenoraRuntimePyenv_PYTHON_HOME`, `executable` set to
 `PraenoraRuntimePyenv_PYTHON_EXECUTABLE`, and `write_bytecode` set to 0, so that it writes nothing
 into the bundle (an isolated configuration ignores `PYTHONDONTWRITEBYTECODE`): an embedded CPython otherwise derives its prefix from the
 host program, and packages that start Python subprocesses use `sys.executable`. With BioGears, it
-sets `BIOGEARS_RUNTIME`. On Windows, `python312.dll` must be on the DLL search path. The test
+sets `BIOGEARS_RUNTIME`. On Windows, `python312.dll` must be on the DLL search path, and
+`PyConfig_SetBytesString` decodes the paths as UTF-8: a program built with MSVC that holds them in
+string literals is compiled with `/utf-8` (not yet verified). The test
 `bundle.embed` builds and runs such a program ([tests/embed](../tests/embed/embed.cpp)).
 
 ### A separate process

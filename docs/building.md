@@ -112,8 +112,9 @@ with uv's cache already filled: configuration 6 s, build 4 min 14 s (BioGears mo
    bundle relocatable (console scripts find the interpreter beside them; metadata files that name
    the build machine are removed; software bills of materials of distributions built here name
    uv's cache as `uv-cache`, with their RECORD entries updated; pybiogears finds BioGears relative
-   to itself), measures the
-   oldest macOS that every binary supports, and writes the manifest and the CMake package.
+   to itself; on Linux, `python3.12-config`, CPython's shell script, gets the quotes that it needs
+   to find its prefix under a path with a space), measures the oldest macOS that every binary
+   supports, and writes the manifest and the CMake package.
 
 The target `package` builds everything, then archives the bundle with CPack.
 
@@ -145,8 +146,8 @@ The target `package` builds everything, then archives the bundle with CPack.
   version, another operating system or architecture, an older macOS deployment target and an
   engine that the bundle does not hold.
 - `bundle.relocated`: the bundle copied to a path with a space and a non-ASCII character; no binary
-  names the original location or the build tree (macOS), and the Python checks and the embedding
-  program pass there.
+  names the original location or the build tree (macOS), `python3.12-config` names the copy as its
+  prefix (Linux), and the Python checks and the embedding program pass there.
 - `tools.drift`: the drift report ([upstreams.md](upstreams.md#the-drift-report)) against git
   repositories of the test's own.
 - `docs.consistency`: the links of the documentation resolve, and no file names a path on a
