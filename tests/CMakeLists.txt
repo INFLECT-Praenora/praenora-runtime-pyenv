@@ -47,6 +47,8 @@ add_test(NAME bundle.manifest
         "-DPINS=${PROJECT_SOURCE_DIR}/cmake/PraenoraPyenvVersions.cmake"
         "-DBUILD_DIR=${PROJECT_BINARY_DIR}"
         "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        "-DUV_CACHE_DIR=${PRAENORA_PYENV_UV_CACHE_DIR}"
+        "-DBIOGEARS_LIB_REL=${PRAENORA_PYENV_BIOGEARS_LIB_REL}"
         "-DOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/check_manifest.cmake")
 

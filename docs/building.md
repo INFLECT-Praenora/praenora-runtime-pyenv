@@ -88,7 +88,11 @@ with uv's cache already filled: configuration 6 s, build 4 min 14 s (BioGears mo
 3. **BioGears** (with `biogears`): Eigen, Xerces-C and BioGears 8.2.0 are built from their
    submodules into work prefixes in `build/<preset>/work`, with the options of pybiogears' own
    build script (no tools, tests, examples or website; Boost not used). Xerces-C is built without
-   network access or ICU, so that it needs only the system's libraries. A script
+   network access or ICU, so that it needs only the system's libraries. BioGears' CMake modules
+   get Eigen, Xerces-C and CodeSynthesis XSD as cache variables instead of searching for them
+   (`PRAENORA_PYENV_BIOGEARS_DEPENDENCIES`): a search finds a system `libxerces-c-3.2.so` on
+   Ubuntu, whose `xsdcxx` package installs one, or Homebrew's Xerces-C on macOS. These builds
+   neither search CMake's package registries nor write to them. A script
    (`cmake/praenora_pyenv_biogears_bundle.cmake`) copies BioGears' and Xerces-C's shared libraries
    into `<bundle>/biogears/lib`, with load paths relative to themselves, and BioGears' data into
    `<bundle>/biogears/share/biogears/runtime`.
@@ -98,13 +102,17 @@ with uv's cache already filled: configuration 6 s, build 4 min 14 s (BioGears mo
    BioGears; a new submodule commit installs the environment again and rebuilds BioGears, Xerces-C
    or Eigen. uv builds the git and path sources (inflect-sim-core, the viva-* wrappers, viva-core with
    maturin and Rust, pybiogears against BioGears) with the build backends that `pyproject.toml`
-   pins, the project's compilers and its macOS deployment target.
+   pins, the project's compilers and its macOS deployment target. pybiogears' build gets
+   BioGears' CMake package and the same Eigen, Xerces-C and XSD as CMake definitions
+   (`--config-settings-package`).
 5. **The bundle step** (`pyenv_bundle`, `cmake/PraenoraPyenvBundle.cmake`) stops when a
    distribution has another version than `PRAENORA_PYENV_EXPECTED_VERSIONS`, when an excluded
    distribution is installed, or when a distribution ships no license file and is not on
    `PRAENORA_PYENV_LICENSE_ALLOWLIST`. It copies the license files into `licenses/`, makes the
    bundle relocatable (console scripts find the interpreter beside them; metadata files that name
-   the build machine are removed; pybiogears finds BioGears relative to itself), measures the
+   the build machine are removed; software bills of materials of distributions built here name
+   uv's cache as `uv-cache`, with their RECORD entries updated; pybiogears finds BioGears relative
+   to itself), measures the
    oldest macOS that every binary supports, and writes the manifest and the CMake package.
 
 The target `package` builds everything, then archives the bundle with CPack.
@@ -127,8 +135,10 @@ The target `package` builds everything, then archives the bundle with CPack.
 - `bundle.manifest`: the manifest agrees with the build, every file it lists exists, every
   distribution has license files or is on the allow-list, the distributions built from the
   submodules are recorded as `local`, the installed `viva_simulation_core` equals the submodule's,
-  `platform.os_min_version` is not newer than `CMAKE_OSX_DEPLOYMENT_TARGET`, and no file that a
-  consumer reads names the build or source tree.
+  `platform.os_min_version` is not newer than `CMAKE_OSX_DEPLOYMENT_TARGET`, no file that a
+  consumer reads names the build tree, the source tree or uv's cache, and BioGears' binaries
+  (pybiogears' extension module and `biogears/lib`) load BioGears and Xerces-C from
+  `biogears/lib` and no other library from outside the bundle but the operating system's.
 - `bundle.embed`: a program that embeds the bundle's CPython, built with the bundle as its only
   prefix ([outputs.md](outputs.md#embedding)), runs a simulation with `PYTHONPATH` and `PYTHONHOME`
   set and a `workspace.yaml` in its current directory, and writes no bytecode into the bundle. The CMake package refuses a newer

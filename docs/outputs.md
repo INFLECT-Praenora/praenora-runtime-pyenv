@@ -212,6 +212,7 @@ file (`source.licenses`, `python.licenses`, `upstreams.<name>.licenses`,
 | python-copasi | Artistic License (its metadata) |
 | libroadrunner (tellurium) | Apache License 2.0; its `NOTICE.txt` names the NLEQ1 and NLEQ2 solvers of the Zuse Institute Berlin |
 | antimony (wheel) | BSD 3-Clause (libAntimony's LICENSE.txt; the wheel's metadata says MIT; on the allow-list) |
+| phrasedml (wheel, Linux and Windows) | BSD 3-Clause (phrasedml's LICENSE.txt at tag 1.3.0; the wheel's metadata says MIT; on the allow-list) |
 | Other distributions | As their files in `licenses/python-packages/` state |
 
 The table summarizes what the files say; no license review has been made. Points that publishing

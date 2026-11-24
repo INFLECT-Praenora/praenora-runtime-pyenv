@@ -6,8 +6,8 @@ as a release that automated builds of the
 scheduled drift report. What a bundle holds and how it is consumed is in [outputs.md](outputs.md);
 building one on your own machine is in [building.md](building.md).
 
-Not yet verified: the workflow has not run on GitHub, and its Linux and Windows builds are the first
-builds of those presets.
+Not yet verified: the workflow has not yet passed on GitHub, and its Linux and Windows builds are
+the first builds of those presets.
 
 ## The workflow
 

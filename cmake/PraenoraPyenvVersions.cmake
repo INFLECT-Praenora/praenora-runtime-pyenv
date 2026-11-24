@@ -138,4 +138,5 @@ set(PRAENORA_PYENV_OS_MIN_VERSION_IGNORE
 # Installed distributions that ship no license file, with their license as checked
 # (docs/outputs.md#licenses).
 set(PRAENORA_PYENV_LICENSE_ALLOWLIST
-    "antimony=BSD-3-Clause (libAntimony's LICENSE.txt; the wheel's metadata says MIT)")
+    "antimony=BSD-3-Clause (libAntimony's LICENSE.txt; the wheel's metadata says MIT)"
+    "phrasedml=BSD-3-Clause (phrasedml's LICENSE.txt at tag 1.3.0; the wheel's metadata says MIT)")

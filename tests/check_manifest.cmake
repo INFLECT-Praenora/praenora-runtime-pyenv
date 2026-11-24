@@ -1,15 +1,17 @@
 # Test bundle.manifest: the manifest of the bundle in BUNDLE agrees with the build, lists files
-# that exist, and the bundle holds no excluded distribution and no file that names the build or
-# source tree where a consumer would read it (docs/building.md#checking-a-bundle).
+# that exist, and the bundle holds no excluded distribution and no file that names the build
+# tree, the source tree or uv's cache where a consumer would read it; BioGears' binaries load no
+# library from outside the bundle but the operating system's (docs/building.md#checking-a-bundle).
 #
 #   cmake -DBUNDLE=<dir> -DPACKAGE_NAME=<name> -DVERSION=<version> -DOS=<os> -DARCH=<arch>
 #         -DCOMPILER_LABEL=<label> -DENGINES=<engines, separated by ','> -DPINS=<file>
-#         -DBUILD_DIR=<dir> -DSOURCE_DIR=<dir> -P tests/check_manifest.cmake
+#         -DBUILD_DIR=<dir> -DSOURCE_DIR=<dir> -DUV_CACHE_DIR=<dir>
+#         [-DBIOGEARS_LIB_REL=<dir>] -P tests/check_manifest.cmake
 
 cmake_minimum_required(VERSION 3.24)
 
 foreach(_variable IN ITEMS BUNDLE PACKAGE_NAME VERSION OS ARCH COMPILER_LABEL PINS BUILD_DIR
-                           SOURCE_DIR)
+                           SOURCE_DIR UV_CACHE_DIR)
     if(NOT DEFINED ${_variable} OR "${${_variable}}" STREQUAL "")
         message(FATAL_ERROR "${_variable} is not set")
     endif()
@@ -206,8 +208,8 @@ foreach(_index RANGE ${_last})
 endforeach()
 check_equal("excluded" "${_names}" "${PRAENORA_PYENV_EXCLUDED_DISTRIBUTIONS}")
 
-# No file that a consumer reads names the build or source tree: the manifest, the CMake package,
-# and the files of python/ but compiled binaries.
+# No file that a consumer reads names the build tree, the source tree or uv's cache: the manifest,
+# the CMake package, and the files of python/ but compiled binaries.
 file(GLOB_RECURSE _files LIST_DIRECTORIES false "${BUNDLE}/python/*" "${BUNDLE}/lib/cmake/*")
 list(APPEND _files "${_manifest_file}")
 set(_offenders "")
@@ -217,17 +219,83 @@ foreach(_file IN LISTS _files)
        _file MATCHES "/bin/python3\\.[0-9]+$")
         continue()
     endif()
-    file(STRINGS "${_file}" _hits REGEX "${BUILD_DIR}|${SOURCE_DIR}/external" LIMIT_COUNT 1)
+    file(STRINGS "${_file}" _hits REGEX "${BUILD_DIR}|${SOURCE_DIR}/external|${UV_CACHE_DIR}"
+        LIMIT_COUNT 1)
     if(_hits)
         list(APPEND _offenders "${_file}")
     endif()
 endforeach()
 list(LENGTH _offenders _count)
 if(_count EQUAL 0)
-    _report(TRUE "no file names the build or source tree")
+    _report(TRUE "no file names the build tree, the source tree or uv's cache")
 else()
     list(JOIN _offenders "\n  " _offenders)
-    _report(FALSE "${_count} file(s) name the build or source tree:\n  ${_offenders}")
+    _report(FALSE
+        "${_count} file(s) name the build tree, the source tree or uv's cache:\n  ${_offenders}")
+endif()
+
+# BioGears' binaries, which the build links on this machine, load BioGears and Xerces-C from
+# BIOGEARS_LIB_REL and nothing else from outside the bundle but the operating system's libraries.
+# A library of the build machine (Homebrew's Xerces-C, a distribution's libxerces-c-3.2.so) would
+# be found there and nowhere else.
+if(biogears IN_LIST ENGINES AND OS MATCHES "^(macos|linux)$")
+    if(NOT DEFINED BIOGEARS_LIB_REL OR BIOGEARS_LIB_REL STREQUAL "")
+        message(FATAL_ERROR "BIOGEARS_LIB_REL is not set")
+    endif()
+    set(_lib_dir "${BUNDLE}/${BIOGEARS_LIB_REL}")
+    file(GLOB _binaries LIST_DIRECTORIES false "${BUNDLE}/${_site}/pybiogears/*.so"
+        "${_lib_dir}/*")
+    set(_offenders "")
+    set(_count 0)
+    foreach(_binary IN LISTS _binaries)
+        if(IS_SYMLINK "${_binary}")
+            continue()
+        endif()
+        math(EXPR _count "${_count} + 1")
+        get_filename_component(_binary_name "${_binary}" NAME)
+        if(OS STREQUAL "macos")
+            execute_process(COMMAND otool -L "${_binary}" OUTPUT_VARIABLE _output
+                RESULT_VARIABLE _result ENCODING UTF-8)
+            string(REPLACE "\n" ";" _lines "${_output}")
+            list(REMOVE_AT _lines 0)
+            foreach(_line IN LISTS _lines)
+                if(NOT _line MATCHES "^[ \t]+([^ ]+) \\(")
+                    continue()
+                endif()
+                set(_dependency "${CMAKE_MATCH_1}")
+                if(_dependency MATCHES "^(/usr/lib|/System/Library)/")
+                    continue()
+                elseif(_dependency MATCHES "^@rpath/(.+)$" AND
+                       EXISTS "${_lib_dir}/${CMAKE_MATCH_1}")
+                    continue()
+                endif()
+                list(APPEND _offenders "${_binary_name}: ${_dependency}")
+            endforeach()
+        else()
+            execute_process(COMMAND readelf -d "${_binary}" OUTPUT_VARIABLE _output
+                RESULT_VARIABLE _result ENCODING UTF-8)
+            string(REGEX MATCHALL "\\(NEEDED\\)[^\n]*\\[[^]\n]+\\]" _needed "${_output}")
+            foreach(_entry IN LISTS _needed)
+                string(REGEX REPLACE ".*\\[([^]]+)\\]$" "\\1" _dependency "${_entry}")
+                if(_dependency MATCHES "^lib(biogears|xerces-c)" AND
+                   NOT EXISTS "${_lib_dir}/${_dependency}")
+                    list(APPEND _offenders "${_binary_name}: ${_dependency}")
+                endif()
+            endforeach()
+        endif()
+        if(NOT _result EQUAL 0)
+            list(APPEND _offenders "${_binary_name}: not readable")
+        endif()
+    endforeach()
+    if(_count EQUAL 0)
+        _report(FALSE "no binary of BioGears found")
+    elseif(_offenders)
+        list(JOIN _offenders "\n  " _offenders)
+        _report(FALSE "BioGears' binaries load libraries from outside the bundle:\n  ${_offenders}")
+    else()
+        _report(TRUE
+            "the ${_count} binaries of BioGears load libraries of the bundle or the system")
+    endif()
 endif()
 
 if(_failures GREATER 0)

@@ -42,8 +42,8 @@ file(CONFIGURE OUTPUT "${_praenora_pyenv_engines_file}"
     CONTENT "${PRAENORA_PYENV_ENGINES_RESOLVED}\n")
 
 # The environment of the installation. Distributions built from source (viva-core, pybiogears)
-# use the project's compilers and macOS deployment target, and find BioGears in the bundle.
-# Files are copied from uv's cache, never linked to it.
+# use the project's compilers and macOS deployment target. Files are copied from uv's cache, never
+# linked to it.
 set(_praenora_pyenv_sync_env
     "UV_PROJECT_ENVIRONMENT=${PRAENORA_PYENV_PYTHON_HOME}"
     UV_LINK_MODE=copy
@@ -59,11 +59,19 @@ endif()
 # uv reuses its build of a path source while the source's pyproject.toml is unchanged, so
 # simulation-core is reinstalled from its submodule each time, and a new commit of a submodule
 # installs the environment again. pybiogears is compiled against BioGears: uv's cached build of it
-# is not reused either, and a new build of BioGears installs the environment again.
+# is not reused either, and a new build of BioGears installs the environment again. Its build
+# (scikit-build-core) gets BioGears' CMake package in the build tree and the Eigen, Xerces-C and
+# XSD that BioGears was built with as CMake definitions, so that it finds none of the build
+# machine's own.
 set(_praenora_pyenv_sync_args --reinstall-package simulation-core)
 set(_praenora_pyenv_sync_depends "${PRAENORA_PYENV_INFLECT_SIM_CORE_COMMIT_FILE}")
 if(biogears IN_LIST PRAENORA_PYENV_ENGINES_RESOLVED)
-    list(APPEND _praenora_pyenv_sync_env "CMAKE_PREFIX_PATH=${PRAENORA_PYENV_BIOGEARS_PREFIX}")
+    foreach(_praenora_pyenv_definition IN ITEMS
+            "Biogears_DIR=${PRAENORA_PYENV_BIOGEARS_PREFIX}/lib/cmake/Biogears"
+            ${PRAENORA_PYENV_BIOGEARS_DEPENDENCIES})
+        list(APPEND _praenora_pyenv_sync_args --config-settings-package
+            "pybiogears:cmake.define.${_praenora_pyenv_definition}")
+    endforeach()
     list(APPEND _praenora_pyenv_sync_args --reinstall-package pybiogears)
     list(APPEND _praenora_pyenv_sync_depends
         "${PROJECT_BINARY_DIR}/stamps/biogears-bundle.stamp"

@@ -21,8 +21,8 @@ Producing bundles that the Praenora runtime can consume takes priority over ever
 
 Verified on macOS arm64 with AppleClang 17 and CPython 3.12.16: the build with the default engines,
 all checks of `ctest`, and the archive. The Linux and Windows presets are written but not yet
-verified. The GitHub Actions workflow (`.github/workflows/build.yml`) is written but has not run
-(not yet verified); no release has been published. The Praenora runtime does not consume the
+verified. The GitHub Actions workflow (`.github/workflows/build.yml`) is written but has not yet
+passed (not yet verified); no release has been published. The Praenora runtime does not consume the
 bundles yet.
 
 ## Setup and commands

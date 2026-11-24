@@ -1,5 +1,5 @@
 # Builds the Python environment bundle on each platform, checks it and archives it, and reports
-# upstream drift (docs/releasing.md). Not yet verified: the workflow has not run.
+# upstream drift (docs/releasing.md). Not yet verified: the workflow has not yet passed.
 #
 # - On a pull request to main: builds and checks every bundle and keeps the archives as workflow
 #   artifacts for 7 days.

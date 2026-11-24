@@ -48,8 +48,8 @@ Verified on macOS arm64 with AppleClang 17 and CPython 3.12.16: the build with t
 (tellurium, copasi, biogears, rust), all checks of `ctest` (among them a simulation with each
 engine, a program that embeds the interpreter, and the bundle moved to another directory), and the
 archive. The Linux and Windows presets are written but not yet verified. The GitHub Actions
-workflow is written but has not run (not yet verified), and no release has been published. The
-Praenora runtime does not consume the bundles yet.
+workflow is written but has not yet passed (not yet verified), and no release has been published.
+The Praenora runtime does not consume the bundles yet.
 
 ## Documentation
 

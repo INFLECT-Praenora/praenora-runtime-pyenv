@@ -17,7 +17,10 @@ file(MAKE_DIRECTORY "${WORK_DIR}")
 set(_failures 0)
 function(_case name os requested expected_result expected_output)
     set(_probe "${WORK_DIR}/probe-${name}.cmake")
+    # The child sets the policies of CMake 3.24 as the project does; without it, CMake 3 reads
+    # if(... IN_LIST ...) with the old behavior of policy CMP0057.
     file(WRITE "${_probe}" "
+cmake_minimum_required(VERSION 3.24)
 include(\"${SOURCE_DIR}/cmake/PraenoraPyenvEngines.cmake\")
 praenora_pyenv_resolve_engines(_engines OS ${os} REQUESTED \"${requested}\")
 message(\"engines=\${_engines}\")
