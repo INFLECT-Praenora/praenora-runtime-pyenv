@@ -18,11 +18,20 @@
 namespace {
 
 bool initialize() {
+    // UTF-8 mode: the interpreter decodes the paths below and encodes file names as UTF-8. An
+    // isolated configuration does not set the locale, and in the C locale an interpreter on Linux
+    // uses ASCII. The preinitialization comes first: PyConfig_SetBytesString decodes with it.
+    PyPreConfig preconfig;
+    PyPreConfig_InitIsolatedConfig(&preconfig);
+    preconfig.utf8_mode = 1;
+    PyStatus status = Py_PreInitialize(&preconfig);
     PyConfig config;
     PyConfig_InitIsolatedConfig(&config);
     // An isolated configuration ignores PYTHONDONTWRITEBYTECODE; nothing is written into the bundle.
     config.write_bytecode = 0;
-    PyStatus status = PyConfig_SetBytesString(&config, &config.home, PRAENORA_PYENV_PYTHON_HOME);
+    if (!PyStatus_Exception(status)) {
+        status = PyConfig_SetBytesString(&config, &config.home, PRAENORA_PYENV_PYTHON_HOME);
+    }
     if (!PyStatus_Exception(status)) {
         status = PyConfig_SetBytesString(&config, &config.executable,
                                          PRAENORA_PYENV_PYTHON_EXECUTABLE);

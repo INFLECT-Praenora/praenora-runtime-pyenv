@@ -142,12 +142,20 @@ target_link_libraries(<target> PRIVATE Python3::Python)
 At run time, it initializes an isolated interpreter (`PyConfig_InitIsolatedConfig`) with `home`
 set to `PraenoraRuntimePyenv_PYTHON_HOME`, `executable` set to
 `PraenoraRuntimePyenv_PYTHON_EXECUTABLE`, and `write_bytecode` set to 0, so that it writes nothing
-into the bundle (an isolated configuration ignores `PYTHONDONTWRITEBYTECODE`): an embedded CPython otherwise derives its prefix from the
-host program, and packages that start Python subprocesses use `sys.executable`. With BioGears, it
-sets `BIOGEARS_RUNTIME`. On Windows, `python312.dll` must be on the DLL search path, and
-`PyConfig_SetBytesString` decodes the paths as UTF-8: a program built with MSVC that holds them in
-string literals is compiled with `/utf-8` (not yet verified). The test
-`bundle.embed` builds and runs such a program ([tests/embed](../tests/embed/embed.cpp)).
+into the bundle (an isolated configuration ignores `PYTHONDONTWRITEBYTECODE`): an embedded CPython
+otherwise derives its prefix from the host program, and packages that start Python subprocesses
+use `sys.executable`. Before it sets the paths, it preinitializes the interpreter in UTF-8 mode
+(`PyPreConfig_InitIsolatedConfig`, `utf8_mode` set to 1, `Py_PreInitialize`): an isolated
+configuration does not set the locale, and in the C locale an interpreter on Linux decodes and
+encodes file names as ASCII, which fails for a bundle under a path with other characters. With
+BioGears, it sets `BIOGEARS_RUNTIME`. On Windows, `python312.dll` must be on the DLL search path,
+and `PyConfig_SetBytesString` decodes the paths as UTF-8: a program built with MSVC that holds them
+in string literals is compiled with `/utf-8`. The paths of a bundle's deepest files exceed 260
+characters when the bundle lies in a deep directory; Windows opens them only for a program whose
+manifest declares it long-path-aware (`longPathAware`, as in `python.exe`'s manifest), with long
+paths enabled in Windows (`LongPathsEnabled`) (not yet verified). The test `bundle.embed` builds
+and runs such a program ([tests/embed](../tests/embed/embed.cpp)), and `bundle.relocated` runs it
+against a copy of the bundle under a path with a space and a non-ASCII character.
 
 ### A separate process
 

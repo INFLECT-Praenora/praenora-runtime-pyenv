@@ -43,6 +43,12 @@ target_compile_definitions(praenora_pyenv_embed PRIVATE
 if(MSVC)
     target_compile_options(praenora_pyenv_embed PRIVATE /utf-8)
 endif()
+# Windows refuses paths longer than 260 characters to a program whose manifest does not declare it
+# long-path-aware; a bundle's deepest files exceed that in a deep directory. CMake embeds the
+# manifest in the program.
+if(WIN32)
+    target_sources(praenora_pyenv_embed PRIVATE embed.manifest)
+endif()
 if(NOT WIN32)
     set_target_properties(praenora_pyenv_embed PROPERTIES
         BUILD_RPATH "${PraenoraRuntimePyenv_PYTHON_HOME}/lib")
